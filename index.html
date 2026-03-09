@@ -1,254 +1,122 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kinder Woordenhulp AI</title>
-
-<style>
-  body {
-    font-family: Arial, sans-serif;
-    background: linear-gradient(#fff7cc,#ffdfc9,#ffd0e1);
-    padding:20px;
-  }
-  h1 {
-    text-align:center;
-    color:#d96f00;
-    font-size:36px;
-    margin-bottom:24px;
-    text-shadow:1px 1px #ffffffaa;
-  }
-  .card {
-    background:#fff8ee;
-    padding:20px;
-    border-radius:16px;
-    border:2px solid #ffb06a;
-    max-width:720px;
-    margin:auto;
-    box-shadow:0 3px 8px #00000022;
-  }
-  .row {display:flex; gap:8px; flex-wrap:wrap;}
-  input {
-    padding:12px; border:2px solid #ffb06a; border-radius:8px;
-    width:65%; font-size:17px;
-  }
-  .btn {
-    background:#ff8a3d; color:white;
-    padding:12px 18px; border-radius:8px;
-    cursor:pointer; font-size:16px; border:none;
-  }
-  .btn:hover {background:#ff7b1e;}
-  .result {
-    background:#fff3db; margin-top:20px; padding:18px;
-    border-radius:12px; border:1px solid #ffb06a;
-    box-shadow:0 2px 5px #00000011; font-size:17px;
-  }
-  .muted {color:#6b7280; font-size:12px; margin-top:8px;}
-  strong {color:#d26700;}
-  .badge {
-    display:inline-block; background:#ffe3c8; border:1px solid #ffc69a;
-    color:#8a4b00; padding:2px 8px; border-radius:999px; font-size:11px;
-  }
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Kinder Woordenhulp AI</title>
+  <style>
+    :root{
+      --bg1:#fff7cc; --bg2:#ffdfc9; --bg3:#ffd0e1;
+      --brand:#ff8a3d; --brand-d:#ff7b1e; --border:#ffb06a;
+      --ink:#d26700; --muted:#6b7280;
+    }
+    *{box-sizing:border-box}
+    body{
+      font-family: Arial, system-ui;
+      background: linear-gradient(var(--bg1),var(--bg2),var(--bg3));
+      padding: 20px;
+      color:#111;
+    }
+    h1{
+      text-align:center; color:#d96f00; font-size:32px; margin:0 0 20px;
+      text-shadow:1px 1px #ffffffaa;
+    }
+    .card{
+      background:#fff8ee; padding:20px; border-radius:16px; border:2px solid var(--border);
+      max-width: 760px; margin: auto; box-shadow:0 3px 8px #00000022;
+    }
+    .row{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+    input{
+      flex:1 1 320px; padding:12px; border:2px solid var(--border); border-radius:8px; font-size:16px;
+    }
+    .btn{
+      background:var(--brand); color:#fff; border:none; padding:12px 18px; border-radius:8px; cursor:pointer; font-size:16px;
+    }
+    .btn:hover{background:var(--brand-d)}
+    .result{
+      background:#fff3db; margin-top:16px; padding:16px; border-radius:12px; border:1px solid var(--border);
+      box-shadow:0 2px 5px #00000011; font-size:16px; white-space:pre-wrap;
+    }
+    .muted{color:var(--muted); font-size:12px; margin-top:8px}
+    .err{color:#9b1c1c; background:#ffecec; border-color:#f5b7b7}
+    .ok {color:#0b5d1e}
+    .spinner{display:inline-block; width:1em; height:1em; border:2px solid #fff; border-right-color:transparent; border-radius:50%; animation:spin 0.7s linear infinite; vertical-align:-2px}
+    @keyframes spin{to{transform:rotate(360deg)}}
+  </style>
 </head>
-
 <body>
 
-<h1>Kinder Woordenhulp AI (Offline versie)</h1>
+  <h1>Kinder Woordenhulp AI</h1>
 
-<div class="card">
-  <div class="row">
-    <input id="wordInput" placeholder="Typ een woord… bijv. leerkracht, energie, natuurkunde">
-    <button class="btn" onclick="lookup()">Zoek</button>
+  <div class="card">
+    <div class="row">
+      <input id="woord" placeholder="Typ een woord… (bijv. leraar, energie, onderzoek)" />
+      <button class="btn" id="btnZoek" onclick="zoek()">Zoek</button>
+    </div>
+    <div id="hint" class="muted">
+      Deze pagina draait op <strong>GitHub Pages</strong> en vraagt uitleg op bij jouw
+      <strong>Netlify‑functie</strong> (AI). Werkt op elk apparaat.
+    </div>
+    <div id="uitkomst" class="result" style="display:none"></div>
   </div>
 
-  <div id="resultBox" class="muted">
-    Werkt volledig offline — gebruikt OpenTaal‑stijl woordherkenning + slimme AI‑uitleg.
-  </div>
-</div>
+  <script>
+    // ✅ VERVANG dit door jouw echte Netlify-site (zonder trailing slash)
+    // Voorbeeld: https://woordenhulp-ai-netlify.netlify.app
+    const API_BASE = "https://YOUR-NETLIFY-SITE.netlify.app";
 
-<script>
-/* -----------------------------------------------
-   0. Voorbereiding (helpers)
-------------------------------------------------*/
-const norm = s => (s||"").toLowerCase()
- .normalize("NFKD").replace(/[\u0300-\u036f]/g,"").trim();
+    const elWoord   = document.getElementById("woord");
+    const elBtn     = document.getElementById("btnZoek");
+    const elUit     = document.getElementById("uitkomst");
 
-const ucfirst = s => s.charAt(0).toUpperCase() + s.slice(1);
-const pick = arr => arr[Math.floor(Math.random()*arr.length)];
-
-/* -----------------------------------------------
-   1. Kleine kernlijst (legaal + uitbreidbaar)
-------------------------------------------------*/
-const baseWords = {
-  "atmosfeer":"De luchtlaag rondom de aarde.",
-  "fossiel":"Een versteend overblijfsel van iets dat heel oud is.",
-  "strategie":"Een slim plan om iets goed aan te pakken.",
-  "energie":"De kracht die dingen laat bewegen of werken.",
-  "natuurkunde":"De wetenschap die onderzoekt hoe de wereld werkt.",
-  "onderzoek":"Iets stap voor stap uitzoeken om het beter te begrijpen.",
-  "leerkracht":"Iemand die lesgeeft in een klas."
-};
-
-/* -----------------------------------------------
-   2. OpenTaal-achtige woordherkenning
-      (zonder de echte 400.000 woorden in te laden)
-------------------------------------------------*/
-/* 
-We gebruiken herkenbare Nederlandse patronen:
-- Meervouden (en, s)
-- Verkleinwoorden (je, tje, etje)
-- Werkwoordsvormen (en, t, te, den)
-- Samenstellingen (fietsbel, schoolbord)
-- Afleidingen (-heid, -ing, -baar, -loos, -achtig)
-*/
-function stripDutchForms(w) {
-  const baseCandidates = [];
-
-  // enkelvoud uit meervoud
-  if (w.endsWith("en")) baseCandidates.push(w.slice(0,-2));
-  if (w.endsWith("s"))  baseCandidates.push(w.slice(0,-1));
-
-  // verkleining
-  if (w.endsWith("je")) baseCandidates.push(w.slice(0,-2));
-  if (w.endsWith("tje")) baseCandidates.push(w.slice(0,-3));
-  if (w.endsWith("etje")) baseCandidates.push(w.slice(0,-4));
-
-  // ww‑vormen
-  if (w.endsWith("te")) baseCandidates.push(w.slice(0,-2));
-  if (w.endsWith("ten")) baseCandidates.push(w.slice(0,-3));
-  if (w.endsWith("t")) baseCandidates.push(w.slice(0,-1));
-
-  // samenstelling: probeer splitsingen
-  if (w.length > 7) {
-    for (let i=3; i<w.length-3; i++) {
-      const left = w.slice(0,i);
-      const right = w.slice(i);
-      baseCandidates.push(left);
-      baseCandidates.push(right);
+    function setLoading(loading){
+      elBtn.disabled = loading;
+      elBtn.innerHTML = loading ? `<span class="spinner"></span> Bezig…` : `Zoek`;
     }
-  }
 
-  return [...new Set(baseCandidates)];
-}
+    function show(text, isError=false){
+      elUit.style.display = "block";
+      elUit.className = "result" + (isError ? " err" : "");
+      elUit.textContent = text;
+    }
 
-/* -----------------------------------------------
-   3. Slimme offline AI (Optie A+B+C)
-------------------------------------------------*/
-const THEMES = [
- {label:"school en leren", kw:["school","klas","leer","toets"]},
- {label:"natuur en techniek", kw:["energie","warm","kracht","elektr","thermo"]},
- {label:"biologie en natuur", kw:["plant","dier","eco","bio"]},
- {label:"mens en maatschappij", kw:["mens","polit","samenleving","cultuur"]},
- {label:"taal en communicatie", kw:["woord","zin","tekst","taal"]},
- {label:"sport en beweging", kw:["sport","wedstrijd","team","trainer"]},
- {label:"kunst en cultuur", kw:["muziek","dans","kunst","film"]},
- {label:"wiskunde en logica", kw:["som","reken","grafiek","logica"]},
-];
+    async function zoek(){
+      const w = (elWoord.value || "").trim();
+      if(!w){
+        show("Tip: typ eerst een woord in het vakje.", true);
+        return;
+      }
 
-function detectTheme(w){
-  for(const t of THEMES){
-    if(t.kw.some(k=>w.includes(k))) return t.label;
-  }
-  return "algemene kennis";
-}
+      setLoading(true);
+      show("Uitleg ophalen…");
 
-function guessPOS(w){
-  if(w.endsWith("en")) return "werkwoord";
-  if(/(heid|ing|schap)$/.test(w)) return "zelfstandig naamwoord (abstract)";
-  return "zelfstandig naamwoord";
-}
+      try{
+        const url = `${API_BASE}/.netlify/functions/uitleg?woord=${encodeURIComponent(w)}`;
+        const res = await fetch(url, { method:"GET" });
 
-function exampleSentence(w, theme){
-  const pools = {
-    "school en leren":[
-      `De leerkracht legt ${w} uit in de klas.`,
-      `We gebruiken ${w} tijdens het oefenen.`,
-      `In het werkboek staat een voorbeeld van ${w}.`
-    ],
-    "natuur en techniek":[
-      `Je kunt onderzoeken hoe ${w} precies werkt.`,
-      `${ucfirst(w)} speelt een rol bij proefjes.`,
-      `In techniekles leren we meer over ${w}.`
-    ],
-    "taal en communicatie":[
-      `${ucfirst(w)} helpt om teksten beter te begrijpen.`,
-      `In een zin kan ${w} een belangrijk begrip zijn.`,
-      `We gebruiken ${w} om iets duidelijk te maken.`
-    ],
-    "algemene kennis":[
-      `${ucfirst(w)} kom je vaak in het dagelijks leven tegen.`,
-      `Het is handig om te weten wat ${w} betekent.`,
-      `${ucfirst(w)} gebruiken we in deze voorbeeldzin.`
-    ]
-  };
-  return pick(pools[theme] || pools["algemene kennis"]);
-}
+        if(!res.ok){
+          const msg = `Serverfout (${res.status}). Probeer het later opnieuw.`;
+          show(msg, true);
+          setLoading(false);
+          return;
+        }
 
-function smartAI(word){
-  const w = norm(word);
-  const theme = detectTheme(w);
-  const pos = guessPOS(w);
+        const data = await res.json();
+        if (data && data.uitleg){
+          show(data.uitleg, false);
+        } else {
+          show("Geen uitleg ontvangen van de AI‑service.", true);
+        }
+      } catch(err){
+        show("Kon geen verbinding maken met de AI‑service. Controleer je Netlify‑URL of internetverbinding.", true);
+      } finally{
+        setLoading(false);
+      }
+    }
 
-  const short = `“${word}” hoort bij ${theme}. Het betekent iets dat je kunt leren begrijpen.`;
-
-  const long = [
-    `Het woord “${word}” past bij het thema ${theme}.`,
-    `Het wordt meestal gebruikt als ${pos}.`,
-    exampleSentence(word, theme)
-  ].join(" ");
-
-  return {short,long};
-}
-
-/* -----------------------------------------------
-   4. Hoofdlogica: lokaal → OpenTaal‑herkenning → AI
-------------------------------------------------*/
-function lookup(){
-  const box = document.getElementById("resultBox");
-  const w = norm(document.getElementById("wordInput").value);
-
-  if(!w) return;
-
-  /* 1) direct lokaal */
-  if(baseWords[w]){
-    const ai = smartAI(w);
-    box.innerHTML = `
-      <div class="result">
-        <strong>Korte uitleg (lokaal):</strong> ${baseWords[w]} <span class="badge">lokaal</span><br><br>
-        <strong>Lange uitleg:</strong> ${ai.long}
-      </div>`;
-    return;
-  }
-
-  /* 2) OpenTaal‑stijl woordherkenning */
-  const guesses = stripDutchForms(w);
-
-  const found = guesses.find(g => baseWords[g]);
-  if(found){
-    const ai = smartAI(found);
-    box.innerHTML = `
-      <div class="result">
-        <strong>Korte uitleg:</strong> ${baseWords[found]} <span class="badge">ontleed</span><br><br>
-        <strong>Lange uitleg:</strong> ${ai.long}
-      </div>`;
-    return;
-  }
-
-  /* 3) offline AI fallback */
-  const ai = smartAI(w);
-  box.innerHTML = `
-    <div class="result">
-      <strong>Korte AI‑uitleg:</strong> ${ai.short} <span class="badge">offline AI</span><br><br>
-      <strong>Lange AI‑uitleg:</strong> ${ai.long}
-    </div>`;
-}
-
-/* Enter‑toets */
-document.getElementById("wordInput").addEventListener("keydown", e=>{
-  if(e.key==="Enter") lookup();
-});
-</script>
-
+    // Enter-toets activeert zoeken
+    elWoord.addEventListener("keydown", e => { if(e.key === "Enter") zoek(); });
+  </script>
 </body>
 </html>
+``
