@@ -11,11 +11,10 @@
     --brand:#ff8a3d; --brand-d:#ff7b1e;
     --border:#ffb06a; --ink:#d26700; --muted:#6b7280;
   }
-  *{box-sizing:border-box}
   body{
     font-family: Arial, system-ui;
     background: linear-gradient(var(--bg1),var(--bg2),var(--bg3));
-    padding: 20px;
+    padding:20px;
   }
   h1{
     text-align:center;
@@ -34,10 +33,7 @@
     box-shadow:0 3px 8px #00000022;
   }
   .row{
-    display:flex;
-    gap:8px;
-    flex-wrap:wrap;
-    align-items:center;
+    display:flex; gap:8px; flex-wrap:wrap; align-items:center;
   }
   input{
     padding:12px;
@@ -55,7 +51,7 @@
     font-size:16px;
     border:none;
   }
-  .btn:hover{ background:var(--brand-d) }
+  .btn:hover{ background:var(--brand-d); }
   .result{
     background:#fff3db;
     margin-top:20px;
@@ -65,20 +61,20 @@
     box-shadow:0 2px 5px #00000011;
     font-size:17px;
   }
+  strong{ color:var(--ink); }
   .muted{
     color:var(--muted);
     font-size:12px;
     margin-top:8px;
   }
-  strong{ color:var(--ink) }
   .badge{
     display:inline-block;
+    background:#ffe3c8;
+    border:1px solid #ffc69a;
+    color:#8a4b00;
     font-size:11px;
     padding:3px 8px;
     border-radius:999px;
-    background:#ffe3c8;
-    color:#8a4b00;
-    border:1px solid #ffc69a;
     margin-left:6px;
   }
 </style>
@@ -90,91 +86,117 @@
 
 <div class="card">
   <div class="row">
-    <input id="wordInput" placeholder="Typ een woord... (bijv. leerkracht, energie, onderzoek)">
+    <input id="wordInput" placeholder="Typ een woord... (bijv. energie, leerkracht, amateur)">
     <button class="btn" onclick="lookup()">Zoek</button>
   </div>
-  <div id="resultBox" class="muted">
-    De app zoekt in deze volgorde: <b>lokaal</b> → <b>online NL‑woordenboek</b> → <b>slimme offline AI</b>.
-  </div>
+  <div id="resultBox" class="muted">De app zoekt: lokaal → online NL‑woordenboek → offline AI.</div>
 </div>
 
 <script>
-/* -------------------------------
-   Kleine helpers
---------------------------------*/
+/* Utility helpers */
 const norm = s => (s||"").toLowerCase().trim()
  .normalize("NFKD").replace(/[\u0300-\u036f]/g,"");
 const ucfirst = s => s.charAt(0).toUpperCase()+s.slice(1);
 const pick = arr => arr[Math.floor(Math.random()*arr.length)];
 
-/* -------------------------------
-   1) Lokale woordenlijst
---------------------------------*/
+/* 1. Lokale woordenlijst */
 const dictionary = {
-  "atmosfeer": "De luchtlaag rondom de aarde.",
-  "fossiel": "Een versteend overblijfsel van iets dat heel oud is.",
-  "strategie": "Een slim plan om iets op een goede manier aan te pakken.",
-  "experiment": "Een proefje dat je doet om iets te onderzoeken.",
-  "energie": "De kracht die dingen laat bewegen of werken.",
-  "onderzoek": "Stap voor stap iets uitzoeken om het beter te begrijpen.",
-  "concentratie": "Je aandacht ergens volledig bij houden.",
-  "leerkracht": "Iemand die lesgeeft aan leerlingen op school."
+  "atmosfeer":"De luchtlaag rondom de aarde.",
+  "fossiel":"Een versteend overblijfsel van iets dat heel oud is.",
+  "strategie":"Een slim plan om iets op een goede manier aan te pakken.",
+  "experiment":"Een proefje dat je doet om iets te onderzoeken.",
+  "energie":"De kracht die dingen laat bewegen of werken.",
+  "onderzoek":"Stap voor stap iets uitzoeken om het beter te begrijpen.",
+  "concentratie":"Je aandacht ergens volledig bij houden.",
+  "leerkracht":"Iemand die lesgeeft aan leerlingen op school."
 };
 
-/* -------------------------------
-   2) WIKTIONARY (NL) – Betekenisextractie
---------------------------------*/
+/* Kleine tekst‑opschoner */
+function clean(txt){
+  return txt
+    .replace(/\s+/g," ")
+    .replace(/\((?:hulp|bestand)[^)]*\)/gi,"")
+    .replace(/^Geluid:\s*/i,"")
+    .replace(/^Uitspraak:\s*/i,"")
+    .replace(/^Etymologie:\s*/i,"")
+    .trim();
+}
+
+/* 2. WIKTIONARY NL – verbeterde extractie */
 async function fetchDutchMeaning(word){
   try{
     const url =
-      `https://nl.wiktionary.org/w/api.php?action=query&prop=extracts&format=json&origin=*&titles=${encodeURIComponent(word)}`;
-
+     `https://nl.wiktionary.org/w/api.php?action=query&prop=extracts&format=json&origin=*&titles=${encodeURIComponent(word)}`;
     const res = await fetch(url);
     const data = await res.json();
 
     const pages = data?.query?.pages || {};
     const id = Object.keys(pages)[0];
     const extract = pages[id]?.extract;
+
     if(!extract) return null;
 
     const div = document.createElement("div");
     div.innerHTML = extract;
 
-    const paragraphs = [
-      ...Array.from(div.querySelectorAll("p")).map(p=>p.innerText.trim()),
-      ...Array.from(div.querySelectorAll("li")).map(li=>li.innerText.trim())
-    ].filter(t=>t.length>0);
-
-    const meaning = paragraphs.find(t =>
-      !/^(de|het)\s+[a-zA-Z]/i.test(t) &&
-      t.length > 25 &&
-      !/^Afkomstig van/i.test(t) &&
-      !/^Zie ook/i.test(t) &&
-      !/^Uitspraak/i.test(t) &&
-      !/^Synoniemen?/i.test(t)
+    /* 1) Sectie 'Betekenissen' zoeken */
+    const heads = Array.from(div.querySelectorAll("span.mw-headline"));
+    const target = heads.find(h =>
+      /betekenis|betekenissen|definitie|definities/i.test(h.textContent||"")
     );
 
-    return meaning || null;
+    if(target){
+      let node = target.parentElement;
+      let tries = 0;
+
+      while(node && tries<10){
+        if(node.tagName && node.tagName.toLowerCase()==="ol"){
+          const li = node.querySelector("li");
+          if(li){
+            const t = clean(li.innerText||"");
+            if(t.length>20) return t;
+          }
+        }
+        node = node.nextElementSibling;
+        tries++;
+      }
+    }
+
+    /* 2) fallback: paragrafen en li’s */
+    const lines = [
+      ...Array.from(div.querySelectorAll("p")).map(p=>clean(p.innerText||"")),
+      ...Array.from(div.querySelectorAll("li")).map(li=>clean(li.innerText||""))
+    ].filter(t =>
+      t.length>25 &&
+      !/^(de|het)\s+[a-zA-Z]/i.test(t) &&
+      !/^Geluid:/i.test(t) &&
+      !/^Uitspraak:/i.test(t) &&
+      !/^Etymologie:/i.test(t) &&
+      !/^Afkomstig van/i.test(t) &&
+      !/^Zie ook/i.test(t) &&
+      !/^Synoniemen?/i.test(t) &&
+      !/^Vertalingen?/i.test(t)
+    );
+
+    return lines[0] || null;
+
   }catch{
     return null;
   }
 }
 
-/* -------------------------------
-   3) Slimme offline AI
-   (Optie A+B+C gecombineerd)
---------------------------------*/
+/* 3. Slimme offline AI (A+B+C) */
 const THEMES = [
-  {label:"school en leren",kw:["school","klas","leerkracht","leraar","docent","toets"]},
-  {label:"natuur en techniek",kw:["energie","warm","kracht","stroom","thermo","elektr"]},
-  {label:"taal en communicatie",kw:["woord","taal","tekst","zin","schrijf","boek"]},
-  {label:"biologie en natuur",kw:["bio","eco","plant","dier","cel"]},
-  {label:"aardrijkskunde en wereld",kw:["geo","aard","klimaat","weer","land"]},
-  {label:"mens en maatschappij",kw:["polit","samenleving","reger","cultuur"]},
-  {label:"emoties en gedrag",kw:["emo","gevoel","bang","boos","blij","verdriet"]},
-  {label:"sport en beweging",kw:["sport","wedstrijd","train","team","gym"]},
-  {label:"kunst en cultuur",kw:["muziek","teken","schilder","dans","toneel"]},
-  {label:"wiskunde en logica",kw:["som","reken","getal","grafiek","logica"]}
+ {label:"school en leren",kw:["school","klas","leerkracht","leraar","docent","toets"]},
+ {label:"natuur en techniek",kw:["energie","warm","kracht","stroom","thermo","elektr"]},
+ {label:"taal en communicatie",kw:["woord","taal","tekst","zin","schrijf","boek"]},
+ {label:"biologie en natuur",kw:["bio","eco","plant","dier","cel"]},
+ {label:"aardrijkskunde en wereld",kw:["geo","aard","klimaat","weer","land"]},
+ {label:"mens en maatschappij",kw:["polit","samenleving","reger","cultuur"]},
+ {label:"emoties en gedrag",kw:["emo","gevoel","bang","boos","blij","verdriet"]},
+ {label:"sport en beweging",kw:["sport","wedstrijd","train","team","gym"]},
+ {label:"kunst en cultuur",kw:["muziek","teken","schilder","dans","toneel"]},
+ {label:"wiskunde en logica",kw:["som","reken","getal","grafiek","logica"]}
 ];
 
 function detectTheme(w){
@@ -185,47 +207,47 @@ function detectTheme(w){
   return "algemene kennis";
 }
 
-const PREFIX = [
-  {p:"micro", m:"heel klein"},
-  {p:"macro", m:"heel groot"},
-  {p:"thermo",m:"met warmte/temperatuur te maken"},
-  {p:"bio",  m:"over leven, planten of dieren"},
-  {p:"geo",  m:"over de aarde of de wereld"},
-  {p:"anti", m:"tegen iets"}
+const PREFIX=[
+ {p:"micro",m:"heel klein"},
+ {p:"macro",m:"heel groot"},
+ {p:"thermo",m:"met warmte of temperatuur te maken"},
+ {p:"bio",m:"over leven, planten of dieren"},
+ {p:"geo",m:"over de aarde of de wereld"},
+ {p:"anti",m:"tegen iets"}
 ];
-
-const SUFFIX = [
-  {s:"heid",   m:"een eigenschap of toestand"},
-  {s:"ing",    m:"een handeling of het resultaat daarvan"},
-  {s:"schap",  m:"een groep of toestand"},
-  {s:"kunde",  m:"kennis over een onderwerp"},
-  {s:"kracht", m:"iemand met een rol of functie"},
-  {s:"meester",m:"iemand die iets onderwijst of goed kan"},
-  {s:"maker",  m:"iemand die iets maakt"}
+const SUFFIX=[
+ {s:"heid",m:"een eigenschap of toestand"},
+ {s:"ing",m:"een handeling of het resultaat daarvan"},
+ {s:"schap",m:"een groep of toestand"},
+ {s:"kunde",m:"kennis over een onderwerp"},
+ {s:"kracht",m:"iemand met een rol of functie"},
+ {s:"meester",m:"iemand die iets onderwijst of goed kan"},
+ {s:"maker",m:"iemand die iets maakt"}
 ];
 
 function guessPOS(w){
   if(/en$/.test(w)) return "werkwoord";
-  if(/(heid|ing|schap)$/.test(w)) return "zelfstandig naamwoord (abstract)";
-  if(/(kracht|meester|maker)$/.test(w)) return "zelfstandig naamwoord (persoon)";
+  if(/(heid|ing|schap)$/.test(w))
+    return "zelfstandig naamwoord (abstract)";
+  if(/(kracht|meester|maker)$/.test(w))
+    return "zelfstandig naamwoord (persoon)";
   return "zelfstandig naamwoord";
 }
 
 function morphExplain(w){
   const parts=[];
-  PREFIX.forEach(p=>{ if(w.startsWith(p.p)) parts.push(`‘${p.p}-’ betekent ${p.m}`); });
-  SUFFIX.forEach(s=>{ if(w.endsWith(s.s)) parts.push(`‘-${s.s}’ betekent ${s.m}`); });
+  PREFIX.forEach(p=>{ if(w.startsWith(p.p)) parts.push(`‘${p.p}-’ betekent ${p.m}`);});
+  SUFFIX.forEach(s=>{ if(w.endsWith(s.s)) parts.push(`‘-${s.s}’ betekent ${s.m}`);});
   return parts.length ? parts.join(". ")+ "." : "";
 }
 
 function exampleFor(word, theme){
   const w = word;
-
   const pools = {
     "school en leren":[
       `De leerkracht legt ${w} uit in de klas.`,
       `We oefenen met ${w} tijdens de les.`,
-      `In het boek staat een voorbeeld van ${w}.`
+      `In het werkboek staat een voorbeeld van ${w}.`
     ],
     "natuur en techniek":[
       `Je kunt onderzoeken hoe ${w} werkt.`,
@@ -248,7 +270,6 @@ function exampleFor(word, theme){
       `Vandaag gebruiken we ${w} in een voorbeeldzin.`
     ]
   };
-
   return pick(pools[theme] || pools["algemene kennis"]);
 }
 
@@ -258,10 +279,14 @@ function smartAI(word){
   const pos = guessPOS(w);
   const morph = morphExplain(w);
 
-  let shortCore = "het een begrip of onderwerp is dat je kunt leren begrijpen";
-  if(/(kracht|meester|maker)$/.test(w)) shortCore = "het waarschijnlijk om een persoon of rol gaat";
-  if(/(heid|ing|schap)$/.test(w))       shortCore = "het een eigenschap of proces beschrijft";
-  if(/en$/.test(w))                     shortCore = "het een handeling is";
+  let shortCore =
+    "het een onderwerp is dat je kunt leren begrijpen";
+  if(/(kracht|meester|maker)$/.test(w))
+    shortCore="het waarschijnlijk om een persoon of rol gaat";
+  if(/(heid|ing|schap)$/.test(w))
+    shortCore="het een eigenschap of proces beschrijft";
+  if(/en$/.test(w))
+    shortCore="het een handeling is";
 
   return {
     short: `“${word}” hoort bij ${theme}. Kort gezegd betekent het dat ${shortCore}.`,
@@ -275,7 +300,7 @@ function smartAI(word){
 }
 
 /* -------------------------------
-   4) LOGICA: lokaal → online → AI
+   4. Zoekfunctie
 --------------------------------*/
 async function lookup(){
   const box = document.getElementById("resultBox");
@@ -288,20 +313,23 @@ async function lookup(){
     const ai = smartAI(w);
     box.innerHTML = `
       <div class="result">
-        <strong>Korte uitleg (lokaal):</strong> ${dictionary[w]} <span class="badge">lokaal</span><br><br>
+        <strong>Korte uitleg (lokaal):</strong> ${dictionary[w]}
+        <span class="badge">lokaal</span>
+        <br><br>
         <strong>Lange AI‑uitleg:</strong> ${ai.long}
       </div>`;
     return;
   }
 
   /* 2) online NL woordenboek */
-  box.innerHTML = `<div class="result">Zoeken in online woordenboek…</div>`;
+  box.innerHTML = `<div class="result">Zoeken in online Nederlands woordenboek…</div>`;
   const online = await fetchDutchMeaning(w);
 
   if(online){
     box.innerHTML = `
       <div class="result">
-        <strong>Online Nederlandse uitleg:</strong> ${online} <span class="badge">Wiktionary NL</span>
+        <strong>Online Nederlandse uitleg:</strong> ${online}
+        <span class="badge">Wiktionary NL</span>
       </div>`;
     return;
   }
@@ -310,7 +338,9 @@ async function lookup(){
   const ai = smartAI(w);
   box.innerHTML = `
     <div class="result">
-      <strong>Korte AI‑uitleg:</strong> ${ai.short} <span class="badge">offline AI</span><br><br>
+      <strong>Korte AI‑uitleg:</strong> ${ai.short}
+      <span class="badge">offline AI</span>
+      <br><br>
       <strong>Lange AI‑uitleg:</strong> ${ai.long}
     </div>`;
 }
