@@ -1,93 +1,73 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Kinder Woordenhulp AI</title>
 
 <style>
-  body {
-    font-family: Arial, sans-serif;
-    background: linear-gradient(#fff7cc,#ffdfc9,#ffd0e1);
+  :root{
+    --bg1:#fff7cc; --bg2:#ffdfc9; --bg3:#ffd0e1;
+    --brand:#ff8a3d; --brand-d:#ff7b1e;
+    --border:#ffb06a; --ink:#d26700; --muted:#6b7280;
+  }
+  *{box-sizing:border-box}
+  body{
+    font-family: Arial, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    background: linear-gradient(var(--bg1),var(--bg2),var(--bg3));
     padding: 20px;
   }
-
-  h1 {
-    text-align: center;
-    color: #d96f00;
-    font-size: 36px;
-    margin-bottom: 24px;
-    text-shadow: 1px 1px #ffffffaa;
+  h1{
+    text-align:center; color:#d96f00; font-size:36px; margin-bottom:24px; text-shadow:1px 1px #ffffffaa;
   }
-
-  .card {
-    background: #fff8ee;
-    padding: 20px;
-    border-radius: 16px;
-    border: 2px solid #ffb06a;
-    max-width: 720px;
-    margin: auto;
-    box-shadow: 0 3px 8px #00000022;
+  .card{
+    background:#fff8ee; padding:20px; border-radius:16px; border:2px solid var(--border);
+    max-width: 720px; margin:auto; box-shadow:0 3px 8px #00000022;
   }
-
-  input {
-    padding: 12px;
-    border: 2px solid #ffb06a;
-    border-radius: 8px;
-    width: 65%;
-    font-size: 17px;
+  .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+  input{
+    padding:12px; border:2px solid var(--border); border-radius:8px; width:65%; font-size:17px;
   }
-
-  .btn {
-    background: #ff8a3d;
-    color: white;
-    padding: 12px 18px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 16px;
-    margin-left: 8px;
+  .btn{
+    background:var(--brand); color:white; padding:12px 18px; border-radius:8px; cursor:pointer; font-size:16px; border:none;
   }
-
-  .btn:hover {
-    background: #ff7b1e;
+  .btn:hover{background:var(--brand-d)}
+  .result{
+    background:#fff3db; margin-top:20px; padding:18px; border-radius:12px; border:1px solid var(--border);
+    box-shadow:0 2px 5px #00000011; font-size:17px;
   }
-
-  .result {
-    background: #fff3db;
-    margin-top: 20px;
-    padding: 18px;
-    border-radius: 12px;
-    border: 1px solid #ffb06a;
-    box-shadow: 0 2px 5px #00000011;
-    font-size: 17px;
-  }
-
-  strong {
-    color: #d26700;
-  }
-
-  .muted {
-    color: #6b7280;
-    font-size: 12px;
-    margin-top: 8px;
-  }
+  .meta{font-size:12px; color:var(--muted); margin-top:6px}
+  .muted{color:var(--muted); font-size:12px; margin-top:8px}
+  strong{color:var(--ink)}
+  .badge{display:inline-block; font-size:11px; padding:3px 8px; border-radius:999px; background:#ffe3c8; color:#8a4b00; border:1px solid #ffc69a; margin-left:6px}
 </style>
 </head>
-
 <body>
 
 <h1>Kinder Woordenhulp AI</h1>
 
 <div class="card">
-  <input id="wordInput" placeholder="Typ een woord...">
-  <button class="btn" onclick="lookup()">Zoek</button>
-  <div id="resultBox" class="muted">Tip: probeer woorden zoals “amateur”, “onderzoek”, “energie”.</div>
+  <div class="row">
+    <input id="wordInput" placeholder="Typ een woord... (bijv. leerkracht, energie, onderzoek)" />
+    <button class="btn" onclick="lookup()">Zoek</button>
+  </div>
+  <div id="resultBox" class="muted">De app zoekt in deze volgorde: <b>lokaal</b> → <b>online NL‑woordenboek</b> → <b>slimme offline AI</b>.</div>
 </div>
 
 <script>
-/* -----------------------------------------------------------
-   1. Lokale woordenlijst
------------------------------------------------------------ */
+/* ===========================================================
+   0) Helpers
+=========================================================== */
+const clamp = (n,min,max)=>Math.max(min,Math.min(max,n));
+const ucfirst = s => s ? s.charAt(0).toUpperCase()+s.slice(1) : s;
+const norm = s => (s||"").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g,"").replace(/[“”‘’"]/g,'"').replace(/[—–]/g,"-").trim();
+
+/* Kleine shuffle voor variatie */
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)] }
+
+/* ===========================================================
+   1) Lokale woordenlijst (uitbreidbaar)
+=========================================================== */
 const dictionary = {
   "atmosfeer": "De luchtlaag rondom de aarde.",
   "fossiel": "Een versteend overblijfsel van iets dat heel oud is.",
@@ -95,133 +75,188 @@ const dictionary = {
   "experiment": "Een proefje dat je doet om iets te onderzoeken.",
   "energie": "De kracht die dingen laat bewegen of werken.",
   "onderzoek": "Stap voor stap iets uitzoeken om het beter te begrijpen.",
-  "concentratie": "Je aandacht ergens volledig bij houden."
+  "concentratie": "Je aandacht ergens volledig bij houden.",
+  "leerkracht": "Iemand die lesgeeft aan leerlingen op school."
 };
 
-/* -----------------------------------------------------------
-   2. WIKTIONARY NL API (met verbeterde betekenisextractie)
------------------------------------------------------------ */
-async function fetchDutchMeaning(word) {
-  try {
-    const url =
-      `https://nl.wiktionary.org/w/api.php?action=query&prop=extracts&format=json&origin=*&titles=${encodeURIComponent(word)}`;
+/* ===========================================================
+   2) Online Nederlandse woordenboek‑API (Wiktionary NL)
+      → verbeterde extractie van betekenis
+=========================================================== */
+async function fetchDutchMeaning(word, timeoutMs=2000){
+  const controller = new AbortController();
+  const timer = setTimeout(()=>controller.abort(), timeoutMs);
 
-    const response = await fetch(url);
-    const data = await response.json();
+  try{
+    const url = `https://nl.wiktionary.org/w/api.php?action=query&prop=extracts&format=json&origin=*&titles=${encodeURIComponent(word)}`;
+    const res = await fetch(url,{signal:controller.signal});
+    const data = await res.json();
 
-    const pages = data?.query?.pages;
+    const pages = data?.query?.pages || {};
     const id = Object.keys(pages)[0];
     const extract = pages[id]?.extract;
+    if(!extract) return null;
 
-    if (!extract) return null;
-
+    // HTML → tekst, pak eerste echte betekenis (skip “de amateur m” e.d.)
     const div = document.createElement("div");
     div.innerHTML = extract;
 
-    const paragraphs = Array
-      .from(div.querySelectorAll("p"))
-      .map(p => p.innerText.trim())
-      .filter(t => t.length > 0);
+    // 1) Paragrafen
+    const pTexts = Array.from(div.querySelectorAll("p"))
+      .map(p=>p.innerText.trim())
+      .filter(t=>t.length>0);
 
-    if (paragraphs.length === 0) return null;
+    // 2) Lijstitems (soms staan betekenissen in lijsten)
+    const liTexts = Array.from(div.querySelectorAll("li"))
+      .map(li=>li.innerText.trim())
+      .filter(t=>t.length>0);
 
-    // Filter grammar-only lines zoals “de amateur m”
-    const meaning = paragraphs.find(t =>
-      !/^(de|het)\s+[a-zA-Z]/i.test(t) &&
-      t.length > 20 &&
-      !t.startsWith("Afkomstig van") &&
-      !t.startsWith("Zie ook")
+    const candidates = [...pTexts, ...liTexts];
+
+    const meaning = candidates.find(t =>
+      !/^(de|het)\s+[a-zA-Z]/i.test(t) &&    // geen “de X m”
+      t.length > 25 &&
+      !/^Afkomstig van/i.test(t) &&
+      !/^Zie ook/i.test(t) &&
+      !/^Uitspraak/i.test(t) &&
+      !/^Synoniemen?/i.test(t) &&
+      !/^Vertalingen?/i.test(t)
     );
 
     return meaning || null;
-  } catch (e) {
+  }catch(_){
     return null;
+  }finally{
+    clearTimeout(timer);
   }
 }
 
-/* -----------------------------------------------------------
-   3. AI fallback (werkt offline)
------------------------------------------------------------ */
-function detectCategory(w) {
-  if (/energie|warm|kracht|stroom/.test(w)) return "natuur & techniek";
-  if (/emo|gevoel|boos|blij|verdriet|angst/.test(w)) return "emoties & gedrag";
-  if (/woord|taal|tekst|zin/.test(w)) return "taal & communicatie";
-  if (/eco|bio|plant|dier/.test(w)) return "biologie & natuur";
-  if (/onderzoek|proef|test/.test(w)) return "onderzoek & wetenschap";
-  return "iets dat je kunt leren en begrijpen";
+/* ===========================================================
+   3) Slimme offline AI – A+B+C gecombineerd
+   - Thema-detectie (meer domeinen, minder vals‑positief)
+   - Morfologie (voor-/achtervoegsels, samenstellingen)
+   - Taalsoort-gok (znw/ww/bnw/rol)
+   - Sjabloon-teksten + voorbeeldzin
+   - Variatie en kindvriendelijke toon (groep 7/8)
+=========================================================== */
+
+/* 3.1 Domeinen / thema’s */
+const THEMES = [
+  { key:"school_en_leren", label:"school en leren",   kw:["school","klas","leerkracht","leraar","docent","toets","opdracht","cijfer","huiswerk","studie","bibliotheek"] },
+  { key:"natuur_en_techniek", label:"natuur en techniek", kw:["energie","warm","kracht","stroom","motor","elektr","thermo","robot","materiaal","metaal","chem","straling"] },
+  { key:"taal_en_communicatie", label:"taal en communicatie", kw:["woord","taal","tekst","zin","spreek","lezen","schrijf","gramm","spell","boek","verhaal"] },
+  { key:"biologie_en_natuur", label:"biologie en natuur", kw:["bio","eco","plant","dier","cel","bos","water","milieu","natuur","insect","zoogdier"] },
+  { key:"aardrijkskunde_en_wereld", label:"aardrijkskunde en wereld", kw:["geo","aard","klimaat","weer","land","stad","provincie","kaart","atlas","rivier","berg"] },
+  { key:"mens_en_maatschappij", label:"mens en maatschappij", kw:["polit","samenleving","reger","rechten","plichten","gemeente","cultuur","geschieden","maatschapp"] },
+  { key:"emoties_en_gedrag", label:"emoties en gedrag", kw:["emo","gevoel","bang","boos","blij","verdriet","stress","rustig","vriend","pest","samenwerken"] },
+  { key:"sport_en_beweging", label:"sport en beweging", kw:["sport","bal","train","wedstrijd","team","speler","gym","fit","hardloop","voetbal","zwem"] },
+  { key:"kunst_en_cultuur", label:"kunst en cultuur", kw:["muziek","teken","schilder","dans","toneel","museum","film","fotografie","design"] },
+  { key:"wiskunde_en_logica", label:"wiskunde en logica", kw:["som","reken","getal","grafiek","hoeken","meter","liter","gram","tabel","logica","patroon"] }
+];
+
+function detectTheme(word){
+  const w = norm(word);
+  for(const t of THEMES){
+    if(t.kw.some(k=>w.includes(k))) return t.label;
+  }
+  // slimme default op basis van zekere eindes
+  if (/(heid|ing|schap|kunde)$/.test(w)) return "taal en communicatie";
+  return "algemene kennis";
 }
 
-function aiShort(word) {
-  return `“${word}” gaat over ${detectCategory(word)}. Kort gezegd betekent het dat ${autoMeaningShort(word)}.`;
+/* 3.2 Morfologie: voor- en achtervoegsels, rollen, abstracties */
+const SUFFIX_MAP = [
+  {s:"heid",   meaning:"een eigenschap of toestand"},
+  {s:"ing",    meaning:"iets dat ontstaat door een handeling"},
+  {s:"schap",  meaning:"een groep of toestand die bij iets hoort"},
+  {s:"kunde",  meaning:"kennis of het vakgebied over een onderwerp"},
+  {s:"kracht", meaning:"iemand die een rol of functie vervult"},
+  {s:"meester",meaning:"iemand die ergens les in geeft of heel kundig is"},
+  {s:"maker",  meaning:"iemand die iets maakt"},
+  {s:"leraar", meaning:"iemand die lesgeeft"},
+  {s:"docent", meaning:"iemand die lesgeeft"}
+];
+
+const PREFIX_MAP = [
+  {p:"micro", meaning:"heel klein"},
+  {p:"macro", meaning:"heel groot"},
+  {p:"thermo",meaning:"heeft met warmte of temperatuur te maken"},
+  {p:"bio",   meaning:"heeft met leven, planten of dieren te maken"},
+  {p:"geo",   meaning:"heeft met de aarde of de wereld te maken"},
+  {p:"auto",  meaning:"zelf of automatisch"},
+  {p:"anti",  meaning:"tegen iets"}
+];
+
+/* 3.3 Taalsoort (grove gok) */
+function guessPOS(w){
+  if (/(en)$/.test(w)) return "werkwoord";         // lopen, leren
+  if (/(heid|ing|schap)$/.test(w)) return "zelfstandig naamwoord (abstract)";
+  if (/(baar|achtig|loos)$/.test(w)) return "bijvoeglijk naamwoord";
+  if (/(kracht|meester|maker|leraar|docent|kundige)$/.test(w)) return "zelfstandig naamwoord (persoon/rol)";
+  return "zelfstandig naamwoord";
 }
 
-function aiLong(word) {
-  return `Het woord “${word}” hoort bij het thema ${detectCategory(word)}. ${autoMeaningLong(word)} Dit helpt je beter te begrijpen wat het betekent en wanneer je het gebruikt.`;
-}
+/* 3.4 Kernbetekenis uit morfologie */
+function buildMorphoMeaning(w){
+  const parts = [];
 
-function autoMeaningShort(w) {
-  if (w.includes("energie")) return "het kracht geeft aan dingen of ze laat bewegen";
-  if (w.includes("onderzoek")) return "je iets probeert te ontdekken of te begrijpen";
-  if (w.includes("micro")) return "het heel klein is";
-  if (w.includes("macro")) return "het heel groot is";
-  if (w.includes("thermo")) return "het met warmte te maken heeft";
-  if (w.endsWith("heid")) return "het een eigenschap of toestand beschrijft";
-  return "het iets is dat je kunt leren of begrijpen";
-}
-
-function autoMeaningLong(w) {
-  if (w.includes("energie"))
-    return "Energie is iets dat dingen laat bewegen, warm worden of werken. Zoals elektriciteit, zonlicht of je eigen spieren.";
-  if (w.includes("onderzoek"))
-    return "Onderzoek betekent dat je stap voor stap probeert te ontdekken hoe iets werkt, door vragen te stellen en dingen te testen.";
-  if (w.includes("thermo"))
-    return "Thermo betekent warmte, en woorden met ‘thermo’ gaan vaak over temperatuur, warmte of warmtestromen.";
-  if (w.includes("micro"))
-    return "Micro betekent klein; heel klein. Vaak gaat het om dingen die je alleen met een microscoop kunt zien.";
-  if (w.includes("macro"))
-    return "Macro betekent groot; het gaat om dingen die je duidelijk kunt zien zonder hulpmiddelen.";
-  if (w.endsWith("heid"))
-    return "Woorden die eindigen op ‘-heid’ beschrijven meestal een eigenschap, zoals veiligheid of eerlijkheid.";
-  return "Het woord kom je vaak tegen in de klas of in het dagelijks leven en helpt je om dingen beter te begrijpen.";
-}
-
-/* -----------------------------------------------------------
-   4. Hoofdlogica (lokaal → online → AI)
------------------------------------------------------------ */
-async function lookup() {
-  const w = document.getElementById("wordInput").value.toLowerCase().trim();
-  const box = document.getElementById("resultBox");
-
-  if (!w) return;
-
-  // 1) lokaal woordenboek
-  if (dictionary[w]) {
-    box.innerHTML = `
-      <div class="result">
-        <strong>Korte uitleg:</strong><br>${dictionary[w]}<br><br>
-        <strong>Lange uitleg:</strong><br>${aiLong(w)}
-      </div>`;
-    return;
+  for(const {p,meaning} of PREFIX_MAP){
+    if(w.startsWith(p)) parts.push(`‘${p}-’ betekent ${meaning}`);
+  }
+  for(const {s,meaning} of SUFFIX_MAP){
+    if(w.endsWith(s)) parts.push(`‘-${s}’ betekent ${meaning}`);
   }
 
-  // 2) online (Wiktionary NL)
-  const online = await fetchDutchMeaning(w);
-  if (online) {
-    box.innerHTML = `
-      <div class="result">
-        <strong>Online Nederlandse uitleg:</strong><br>${online}
-      </div>`;
-    return;
-  }
-
-  // 3) AI fallback
-  box.innerHTML = `
-    <div class="result">
-      <strong>Korte AI‑uitleg:</strong><br>${aiShort(w)}<br><br>
-      <strong>Lange AI‑uitleg:</strong><br>${aiLong(w)}
-    </div>`;
+  return parts.length ? parts.join(". ") + "." : "";
 }
-</script>
 
-</body>
-</html>
+/* 3.5 Voorbeeldzin genereren (afhankelijk van POS & thema) */
+function exampleSentence(word, pos, theme){
+  const thema = theme || "algemene kennis";
+  const w = word;
+  const schoolTempl = [
+    `De ${w} helpt ons in de klas om het beter te begrijpen.`,
+    `Tijdens de les praten we over ${w} en maken we een opdracht.`,
+    `De leerkracht geeft een voorbeeld met het woord ${w}.`
+  ];
+  const scienceTempl = [
+    `${ucfirst(w)} kun je onderzoeken door te meten en te vergelijken.`,
+    `In een proefje zie je hoe ${w} werkt.`,
+    `${ucfirst(w)} speelt een rol bij natuur en techniek op school.`
+  ];
+  const socialTempl = [
+    `${ucfirst(w)} heeft te maken met hoe mensen samenleven.`,
+    `In de samenleving kom je ${w} vaak tegen.`,
+    `We bespreken ${w} wanneer we het over regels en samenwerken hebben.`
+  ];
+  const sportTempl = [
+    `Bij sport kan ${w} belangrijk zijn om beter te presteren.`,
+    `De trainer legt uit wat ${w} betekent tijdens de training.`,
+    `In het team praten we over ${w} voor de wedstrijd.`
+  ];
+
+  const map = {
+    "school en leren":schoolTempl,
+    "natuur en techniek":scienceTempl,
+    "biologie en natuur":scienceTempl,
+    "aardrijkskunde en wereld":scienceTempl,
+    "mens en maatschappij":socialTempl,
+    "sport en beweging":sportTempl,
+    "taal en communicatie":[
+      `We gebruiken het woord ${w} wanneer we een tekst schrijven.`,
+      `In deze zin is ${w} een belangrijk begrip.`,
+      `De betekenis van ${w} helpt om de tekst te begrijpen.`
+    ],
+    "kunst en cultuur":[
+      `In een tentoonstelling zie je hoe ${w} wordt gebruikt.`,
+      `De kunstenaar laat ${w} op een creatieve manier zien.`,
+      `We bespreken ${w} bij tekenen en muziek.`
+    ],
+    "wiskunde en logica":[
+      `${ucfirst(w)} hoort bij rekenen en logisch denken.`,
+      `Met ${w} kun je een som of probleem aanpakken.`,
+      `De grafiek laat ${w} duidelijk zien.`
+    ],
+    "algemene kennis":[
+      `${ucfirst(w)} kom je in het dagelijks leven vaak tegen.`,
+      `Het is handig om te weten wat ${w} betekent
