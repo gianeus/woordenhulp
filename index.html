@@ -6,268 +6,180 @@
 <title>Kinder Woordenhulp AI</title>
 
 <style>
-  :root{
-    --bg1:#fff7cc; --bg2:#ffdfc9; --bg3:#ffd0e1;
-    --brand:#ff8a3d; --brand-d:#ff7b1e;
-    --border:#ffb06a; --ink:#d26700; --muted:#6b7280;
-  }
-  body{
-    font-family: Arial, system-ui;
-    background: linear-gradient(var(--bg1),var(--bg2),var(--bg3));
+  body {
+    font-family: Arial, sans-serif;
+    background: linear-gradient(#fff7cc,#ffdfc9,#ffd0e1);
     padding:20px;
   }
-  h1{
+  h1 {
     text-align:center;
     color:#d96f00;
     font-size:36px;
     margin-bottom:24px;
     text-shadow:1px 1px #ffffffaa;
   }
-  .card{
+  .card {
     background:#fff8ee;
     padding:20px;
     border-radius:16px;
-    border:2px solid var(--border);
+    border:2px solid #ffb06a;
     max-width:720px;
     margin:auto;
     box-shadow:0 3px 8px #00000022;
   }
-  .row{
-    display:flex; gap:8px; flex-wrap:wrap; align-items:center;
+  .row {display:flex; gap:8px; flex-wrap:wrap;}
+  input {
+    padding:12px; border:2px solid #ffb06a; border-radius:8px;
+    width:65%; font-size:17px;
   }
-  input{
-    padding:12px;
-    border:2px solid var(--border);
-    border-radius:8px;
-    width:65%;
-    font-size:17px;
+  .btn {
+    background:#ff8a3d; color:white;
+    padding:12px 18px; border-radius:8px;
+    cursor:pointer; font-size:16px; border:none;
   }
-  .btn{
-    background:var(--brand);
-    color:white;
-    padding:12px 18px;
-    border-radius:8px;
-    cursor:pointer;
-    font-size:16px;
-    border:none;
+  .btn:hover {background:#ff7b1e;}
+  .result {
+    background:#fff3db; margin-top:20px; padding:18px;
+    border-radius:12px; border:1px solid #ffb06a;
+    box-shadow:0 2px 5px #00000011; font-size:17px;
   }
-  .btn:hover{ background:var(--brand-d); }
-  .result{
-    background:#fff3db;
-    margin-top:20px;
-    padding:18px;
-    border-radius:12px;
-    border:1px solid var(--border);
-    box-shadow:0 2px 5px #00000011;
-    font-size:17px;
-  }
-  strong{ color:var(--ink); }
-  .muted{
-    color:var(--muted);
-    font-size:12px;
-    margin-top:8px;
-  }
-  .badge{
-    display:inline-block;
-    background:#ffe3c8;
-    border:1px solid #ffc69a;
-    color:#8a4b00;
-    font-size:11px;
-    padding:3px 8px;
-    border-radius:999px;
-    margin-left:6px;
+  .muted {color:#6b7280; font-size:12px; margin-top:8px;}
+  strong {color:#d26700;}
+  .badge {
+    display:inline-block; background:#ffe3c8; border:1px solid #ffc69a;
+    color:#8a4b00; padding:2px 8px; border-radius:999px; font-size:11px;
   }
 </style>
 </head>
 
 <body>
 
-<h1>Kinder Woordenhulp AI</h1>
+<h1>Kinder Woordenhulp AI (Offline versie)</h1>
 
 <div class="card">
   <div class="row">
-    <input id="wordInput" placeholder="Typ een woord... (bijv. energie, leerkracht, amateur)">
+    <input id="wordInput" placeholder="Typ een woord… bijv. leerkracht, energie, natuurkunde">
     <button class="btn" onclick="lookup()">Zoek</button>
   </div>
-  <div id="resultBox" class="muted">De app zoekt: lokaal → online NL‑woordenboek → offline AI.</div>
+
+  <div id="resultBox" class="muted">
+    Werkt volledig offline — gebruikt OpenTaal‑stijl woordherkenning + slimme AI‑uitleg.
+  </div>
 </div>
 
 <script>
-/* Utility helpers */
-const norm = s => (s||"").toLowerCase().trim()
- .normalize("NFKD").replace(/[\u0300-\u036f]/g,"");
-const ucfirst = s => s.charAt(0).toUpperCase()+s.slice(1);
+/* -----------------------------------------------
+   0. Voorbereiding (helpers)
+------------------------------------------------*/
+const norm = s => (s||"").toLowerCase()
+ .normalize("NFKD").replace(/[\u0300-\u036f]/g,"").trim();
+
+const ucfirst = s => s.charAt(0).toUpperCase() + s.slice(1);
 const pick = arr => arr[Math.floor(Math.random()*arr.length)];
 
-/* 1. Lokale woordenlijst */
-const dictionary = {
+/* -----------------------------------------------
+   1. Kleine kernlijst (legaal + uitbreidbaar)
+------------------------------------------------*/
+const baseWords = {
   "atmosfeer":"De luchtlaag rondom de aarde.",
   "fossiel":"Een versteend overblijfsel van iets dat heel oud is.",
-  "strategie":"Een slim plan om iets op een goede manier aan te pakken.",
-  "experiment":"Een proefje dat je doet om iets te onderzoeken.",
+  "strategie":"Een slim plan om iets goed aan te pakken.",
   "energie":"De kracht die dingen laat bewegen of werken.",
-  "onderzoek":"Stap voor stap iets uitzoeken om het beter te begrijpen.",
-  "concentratie":"Je aandacht ergens volledig bij houden.",
-  "leerkracht":"Iemand die lesgeeft aan leerlingen op school."
+  "natuurkunde":"De wetenschap die onderzoekt hoe de wereld werkt.",
+  "onderzoek":"Iets stap voor stap uitzoeken om het beter te begrijpen.",
+  "leerkracht":"Iemand die lesgeeft in een klas."
 };
 
-/* Kleine tekst‑opschoner */
-function clean(txt){
-  return txt
-    .replace(/\s+/g," ")
-    .replace(/\((?:hulp|bestand)[^)]*\)/gi,"")
-    .replace(/^Geluid:\s*/i,"")
-    .replace(/^Uitspraak:\s*/i,"")
-    .replace(/^Etymologie:\s*/i,"")
-    .trim();
-}
+/* -----------------------------------------------
+   2. OpenTaal-achtige woordherkenning
+      (zonder de echte 400.000 woorden in te laden)
+------------------------------------------------*/
+/* 
+We gebruiken herkenbare Nederlandse patronen:
+- Meervouden (en, s)
+- Verkleinwoorden (je, tje, etje)
+- Werkwoordsvormen (en, t, te, den)
+- Samenstellingen (fietsbel, schoolbord)
+- Afleidingen (-heid, -ing, -baar, -loos, -achtig)
+*/
+function stripDutchForms(w) {
+  const baseCandidates = [];
 
-/* 2. WIKTIONARY NL – verbeterde extractie */
-async function fetchDutchMeaning(word){
-  try{
-    const url =
-     `https://nl.wiktionary.org/w/api.php?action=query&prop=extracts&format=json&origin=*&titles=${encodeURIComponent(word)}`;
-    const res = await fetch(url);
-    const data = await res.json();
+  // enkelvoud uit meervoud
+  if (w.endsWith("en")) baseCandidates.push(w.slice(0,-2));
+  if (w.endsWith("s"))  baseCandidates.push(w.slice(0,-1));
 
-    const pages = data?.query?.pages || {};
-    const id = Object.keys(pages)[0];
-    const extract = pages[id]?.extract;
+  // verkleining
+  if (w.endsWith("je")) baseCandidates.push(w.slice(0,-2));
+  if (w.endsWith("tje")) baseCandidates.push(w.slice(0,-3));
+  if (w.endsWith("etje")) baseCandidates.push(w.slice(0,-4));
 
-    if(!extract) return null;
+  // ww‑vormen
+  if (w.endsWith("te")) baseCandidates.push(w.slice(0,-2));
+  if (w.endsWith("ten")) baseCandidates.push(w.slice(0,-3));
+  if (w.endsWith("t")) baseCandidates.push(w.slice(0,-1));
 
-    const div = document.createElement("div");
-    div.innerHTML = extract;
-
-    /* 1) Sectie 'Betekenissen' zoeken */
-    const heads = Array.from(div.querySelectorAll("span.mw-headline"));
-    const target = heads.find(h =>
-      /betekenis|betekenissen|definitie|definities/i.test(h.textContent||"")
-    );
-
-    if(target){
-      let node = target.parentElement;
-      let tries = 0;
-
-      while(node && tries<10){
-        if(node.tagName && node.tagName.toLowerCase()==="ol"){
-          const li = node.querySelector("li");
-          if(li){
-            const t = clean(li.innerText||"");
-            if(t.length>20) return t;
-          }
-        }
-        node = node.nextElementSibling;
-        tries++;
-      }
+  // samenstelling: probeer splitsingen
+  if (w.length > 7) {
+    for (let i=3; i<w.length-3; i++) {
+      const left = w.slice(0,i);
+      const right = w.slice(i);
+      baseCandidates.push(left);
+      baseCandidates.push(right);
     }
-
-    /* 2) fallback: paragrafen en li’s */
-    const lines = [
-      ...Array.from(div.querySelectorAll("p")).map(p=>clean(p.innerText||"")),
-      ...Array.from(div.querySelectorAll("li")).map(li=>clean(li.innerText||""))
-    ].filter(t =>
-      t.length>25 &&
-      !/^(de|het)\s+[a-zA-Z]/i.test(t) &&
-      !/^Geluid:/i.test(t) &&
-      !/^Uitspraak:/i.test(t) &&
-      !/^Etymologie:/i.test(t) &&
-      !/^Afkomstig van/i.test(t) &&
-      !/^Zie ook/i.test(t) &&
-      !/^Synoniemen?/i.test(t) &&
-      !/^Vertalingen?/i.test(t)
-    );
-
-    return lines[0] || null;
-
-  }catch{
-    return null;
   }
+
+  return [...new Set(baseCandidates)];
 }
 
-/* 3. Slimme offline AI (A+B+C) */
+/* -----------------------------------------------
+   3. Slimme offline AI (Optie A+B+C)
+------------------------------------------------*/
 const THEMES = [
- {label:"school en leren",kw:["school","klas","leerkracht","leraar","docent","toets"]},
- {label:"natuur en techniek",kw:["energie","warm","kracht","stroom","thermo","elektr"]},
- {label:"taal en communicatie",kw:["woord","taal","tekst","zin","schrijf","boek"]},
- {label:"biologie en natuur",kw:["bio","eco","plant","dier","cel"]},
- {label:"aardrijkskunde en wereld",kw:["geo","aard","klimaat","weer","land"]},
- {label:"mens en maatschappij",kw:["polit","samenleving","reger","cultuur"]},
- {label:"emoties en gedrag",kw:["emo","gevoel","bang","boos","blij","verdriet"]},
- {label:"sport en beweging",kw:["sport","wedstrijd","train","team","gym"]},
- {label:"kunst en cultuur",kw:["muziek","teken","schilder","dans","toneel"]},
- {label:"wiskunde en logica",kw:["som","reken","getal","grafiek","logica"]}
+ {label:"school en leren", kw:["school","klas","leer","toets"]},
+ {label:"natuur en techniek", kw:["energie","warm","kracht","elektr","thermo"]},
+ {label:"biologie en natuur", kw:["plant","dier","eco","bio"]},
+ {label:"mens en maatschappij", kw:["mens","polit","samenleving","cultuur"]},
+ {label:"taal en communicatie", kw:["woord","zin","tekst","taal"]},
+ {label:"sport en beweging", kw:["sport","wedstrijd","team","trainer"]},
+ {label:"kunst en cultuur", kw:["muziek","dans","kunst","film"]},
+ {label:"wiskunde en logica", kw:["som","reken","grafiek","logica"]},
 ];
 
 function detectTheme(w){
   for(const t of THEMES){
     if(t.kw.some(k=>w.includes(k))) return t.label;
   }
-  if(/(heid|ing|schap|kunde)$/.test(w)) return "taal en communicatie";
   return "algemene kennis";
 }
 
-const PREFIX=[
- {p:"micro",m:"heel klein"},
- {p:"macro",m:"heel groot"},
- {p:"thermo",m:"met warmte of temperatuur te maken"},
- {p:"bio",m:"over leven, planten of dieren"},
- {p:"geo",m:"over de aarde of de wereld"},
- {p:"anti",m:"tegen iets"}
-];
-const SUFFIX=[
- {s:"heid",m:"een eigenschap of toestand"},
- {s:"ing",m:"een handeling of het resultaat daarvan"},
- {s:"schap",m:"een groep of toestand"},
- {s:"kunde",m:"kennis over een onderwerp"},
- {s:"kracht",m:"iemand met een rol of functie"},
- {s:"meester",m:"iemand die iets onderwijst of goed kan"},
- {s:"maker",m:"iemand die iets maakt"}
-];
-
 function guessPOS(w){
-  if(/en$/.test(w)) return "werkwoord";
-  if(/(heid|ing|schap)$/.test(w))
-    return "zelfstandig naamwoord (abstract)";
-  if(/(kracht|meester|maker)$/.test(w))
-    return "zelfstandig naamwoord (persoon)";
+  if(w.endsWith("en")) return "werkwoord";
+  if(/(heid|ing|schap)$/.test(w)) return "zelfstandig naamwoord (abstract)";
   return "zelfstandig naamwoord";
 }
 
-function morphExplain(w){
-  const parts=[];
-  PREFIX.forEach(p=>{ if(w.startsWith(p.p)) parts.push(`‘${p.p}-’ betekent ${p.m}`);});
-  SUFFIX.forEach(s=>{ if(w.endsWith(s.s)) parts.push(`‘-${s.s}’ betekent ${s.m}`);});
-  return parts.length ? parts.join(". ")+ "." : "";
-}
-
-function exampleFor(word, theme){
-  const w = word;
+function exampleSentence(w, theme){
   const pools = {
     "school en leren":[
       `De leerkracht legt ${w} uit in de klas.`,
-      `We oefenen met ${w} tijdens de les.`,
+      `We gebruiken ${w} tijdens het oefenen.`,
       `In het werkboek staat een voorbeeld van ${w}.`
     ],
     "natuur en techniek":[
-      `Je kunt onderzoeken hoe ${w} werkt.`,
+      `Je kunt onderzoeken hoe ${w} precies werkt.`,
       `${ucfirst(w)} speelt een rol bij proefjes.`,
-      `In techniekleer leren we meer over ${w}.`
-    ],
-    "mens en maatschappij":[
-      `${ucfirst(w)} heeft te maken met hoe mensen samenleven.`,
-      `We bespreken ${w} in de les maatschappijleer.`,
-      `${ucfirst(w)} zie je vaak terug in het dagelijks leven.`
+      `In techniekles leren we meer over ${w}.`
     ],
     "taal en communicatie":[
-      `We gebruiken ${w} om iets duidelijk uit te leggen.`,
-      `In een tekst kan ${w} een belangrijk begrip zijn.`,
-      `${ucfirst(w)} helpt om taal beter te begrijpen.`
+      `${ucfirst(w)} helpt om teksten beter te begrijpen.`,
+      `In een zin kan ${w} een belangrijk begrip zijn.`,
+      `We gebruiken ${w} om iets duidelijk te maken.`
     ],
     "algemene kennis":[
       `${ucfirst(w)} kom je vaak in het dagelijks leven tegen.`,
       `Het is handig om te weten wat ${w} betekent.`,
-      `Vandaag gebruiken we ${w} in een voorbeeldzin.`
+      `${ucfirst(w)} gebruiken we in deze voorbeeldzin.`
     ]
   };
   return pick(pools[theme] || pools["algemene kennis"]);
@@ -277,77 +189,65 @@ function smartAI(word){
   const w = norm(word);
   const theme = detectTheme(w);
   const pos = guessPOS(w);
-  const morph = morphExplain(w);
 
-  let shortCore =
-    "het een onderwerp is dat je kunt leren begrijpen";
-  if(/(kracht|meester|maker)$/.test(w))
-    shortCore="het waarschijnlijk om een persoon of rol gaat";
-  if(/(heid|ing|schap)$/.test(w))
-    shortCore="het een eigenschap of proces beschrijft";
-  if(/en$/.test(w))
-    shortCore="het een handeling is";
+  const short = `“${word}” hoort bij ${theme}. Het betekent iets dat je kunt leren begrijpen.`;
 
-  return {
-    short: `“${word}” hoort bij ${theme}. Kort gezegd betekent het dat ${shortCore}.`,
-    long: [
-      `Het woord “${word}” past bij het thema ${theme}.`,
-      morph ? morph : "",
-      `Het lijkt te gaan om een ${pos}.`,
-      exampleFor(word, theme)
-    ].join(" ")
-  };
+  const long = [
+    `Het woord “${word}” past bij het thema ${theme}.`,
+    `Het wordt meestal gebruikt als ${pos}.`,
+    exampleSentence(word, theme)
+  ].join(" ");
+
+  return {short,long};
 }
 
-/* -------------------------------
-   4. Zoekfunctie
---------------------------------*/
-async function lookup(){
+/* -----------------------------------------------
+   4. Hoofdlogica: lokaal → OpenTaal‑herkenning → AI
+------------------------------------------------*/
+function lookup(){
   const box = document.getElementById("resultBox");
   const w = norm(document.getElementById("wordInput").value);
 
   if(!w) return;
 
-  /* 1) lokaal */
-  if(dictionary[w]){
+  /* 1) direct lokaal */
+  if(baseWords[w]){
     const ai = smartAI(w);
     box.innerHTML = `
       <div class="result">
-        <strong>Korte uitleg (lokaal):</strong> ${dictionary[w]}
-        <span class="badge">lokaal</span>
-        <br><br>
-        <strong>Lange AI‑uitleg:</strong> ${ai.long}
+        <strong>Korte uitleg (lokaal):</strong> ${baseWords[w]} <span class="badge">lokaal</span><br><br>
+        <strong>Lange uitleg:</strong> ${ai.long}
       </div>`;
     return;
   }
 
-  /* 2) online NL woordenboek */
-  box.innerHTML = `<div class="result">Zoeken in online Nederlands woordenboek…</div>`;
-  const online = await fetchDutchMeaning(w);
+  /* 2) OpenTaal‑stijl woordherkenning */
+  const guesses = stripDutchForms(w);
 
-  if(online){
+  const found = guesses.find(g => baseWords[g]);
+  if(found){
+    const ai = smartAI(found);
     box.innerHTML = `
       <div class="result">
-        <strong>Online Nederlandse uitleg:</strong> ${online}
-        <span class="badge">Wiktionary NL</span>
+        <strong>Korte uitleg:</strong> ${baseWords[found]} <span class="badge">ontleed</span><br><br>
+        <strong>Lange uitleg:</strong> ${ai.long}
       </div>`;
     return;
   }
 
-  /* 3) offline AI */
+  /* 3) offline AI fallback */
   const ai = smartAI(w);
   box.innerHTML = `
     <div class="result">
-      <strong>Korte AI‑uitleg:</strong> ${ai.short}
-      <span class="badge">offline AI</span>
-      <br><br>
+      <strong>Korte AI‑uitleg:</strong> ${ai.short} <span class="badge">offline AI</span><br><br>
       <strong>Lange AI‑uitleg:</strong> ${ai.long}
     </div>`;
 }
 
-/* ENTER‑ondersteuning */
-document.getElementById("wordInput").addEventListener("keydown",
-  e=>{ if(e.key==="Enter") lookup(); });
+/* Enter‑toets */
+document.getElementById("wordInput").addEventListener("keydown", e=>{
+  if(e.key==="Enter") lookup();
+});
 </script>
 
 </body>
