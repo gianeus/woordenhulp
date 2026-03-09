@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Kinder Woordenhulp AI</title>
 
 <style>
@@ -79,38 +79,40 @@
 <h1>Kinder Woordenhulp AI</h1>
 
 <div class="card">
-  <input id="wordInput" placeholder="Typ een woord..." />
+  <input id="wordInput" placeholder="Typ een woord...">
   <button class="btn" onclick="lookup()">Zoek</button>
-  <div id="resultBox" class="muted">Tip: probeer een Nederlands woord zoals “energie”, “amateur”, “onderzoek”.</div>
+  <div id="resultBox" class="muted">Tip: probeer woorden zoals “amateur”, “onderzoek”, “energie”.</div>
 </div>
 
 <script>
 /* -----------------------------------------------------------
-   1. Lokale basiswoordenlijst
+   1. Lokale woordenlijst
 ----------------------------------------------------------- */
 const dictionary = {
   "atmosfeer": "De luchtlaag rondom de aarde.",
   "fossiel": "Een versteend overblijfsel van iets dat heel oud is.",
   "strategie": "Een slim plan om iets op een goede manier aan te pakken.",
   "experiment": "Een proefje dat je doet om iets te onderzoeken.",
-  "energie": "De kracht die nodig is om dingen te laten werken.",
+  "energie": "De kracht die dingen laat bewegen of werken.",
   "onderzoek": "Stap voor stap iets uitzoeken om het beter te begrijpen.",
   "concentratie": "Je aandacht ergens volledig bij houden."
 };
 
 /* -----------------------------------------------------------
-   2. ONLINE NEDERLANDSE WOORDENBOEK API (WIKTIONARY)
-   + Verbeterde betekenis-extractie
+   2. WIKTIONARY NL API (met verbeterde betekenisextractie)
 ----------------------------------------------------------- */
 async function fetchDutchMeaning(word) {
   try {
-    const url = `https://nl.wiktionary.org/w/api.php?action=query&prop=extracts&format=json&origin=*&titles=${encodeURIComponent(word)}`;
+    const url =
+      `https://nl.wiktionary.org/w/api.php?action=query&prop=extracts&format=json&origin=*&titles=${encodeURIComponent(word)}`;
+
     const response = await fetch(url);
     const data = await response.json();
 
     const pages = data?.query?.pages;
     const id = Object.keys(pages)[0];
     const extract = pages[id]?.extract;
+
     if (!extract) return null;
 
     const div = document.createElement("div");
@@ -123,16 +125,15 @@ async function fetchDutchMeaning(word) {
 
     if (paragraphs.length === 0) return null;
 
-    // FILTER GRAMMATICA-TEKST zoals “de amateur m”
+    // Filter grammar-only lines zoals “de amateur m”
     const meaning = paragraphs.find(t =>
-      !/^(de|het)\s+[a-zA-Z]/i.test(t) &&  // geen lidwoord+woordgroep
-      t.length > 20 &&                     // betekenis moet langer zijn
+      !/^(de|het)\s+[a-zA-Z]/i.test(t) &&
+      t.length > 20 &&
       !t.startsWith("Afkomstig van") &&
       !t.startsWith("Zie ook")
     );
 
     return meaning || null;
-
   } catch (e) {
     return null;
   }
@@ -185,7 +186,7 @@ function autoMeaningLong(w) {
 }
 
 /* -----------------------------------------------------------
-   4. HOOFDLOGICA: lokaal → online NL API → AI
+   4. Hoofdlogica (lokaal → online → AI)
 ----------------------------------------------------------- */
 async function lookup() {
   const w = document.getElementById("wordInput").value.toLowerCase().trim();
@@ -193,7 +194,7 @@ async function lookup() {
 
   if (!w) return;
 
-  // 1) Lokale woordenlijst
+  // 1) lokaal woordenboek
   if (dictionary[w]) {
     box.innerHTML = `
       <div class="result">
@@ -203,7 +204,7 @@ async function lookup() {
     return;
   }
 
-  // 2) Online Nederlandse API (Wiktionary)
+  // 2) online (Wiktionary NL)
   const online = await fetchDutchMeaning(w);
   if (online) {
     box.innerHTML = `
