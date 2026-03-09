@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Kinder Woordenhulp AI</title>
 
 <style>
@@ -16,7 +16,7 @@
     text-align: center;
     color: #d96f00;
     font-size: 36px;
-    margin-bottom: 30px;
+    margin-bottom: 24px;
     text-shadow: 1px 1px #ffffffaa;
   }
 
@@ -25,9 +25,9 @@
     padding: 20px;
     border-radius: 16px;
     border: 2px solid #ffb06a;
-    max-width: 700px;
+    max-width: 720px;
     margin: auto;
-    box-shadow: 0px 3px 8px #00000022;
+    box-shadow: 0 3px 8px #00000022;
   }
 
   input {
@@ -54,15 +54,23 @@
 
   .result {
     background: #fff3db;
-    margin-top: 25px;
+    margin-top: 20px;
     padding: 18px;
     border-radius: 12px;
     border: 1px solid #ffb06a;
-    box-shadow: 0px 2px 5px #00000011;
+    box-shadow: 0 2px 5px #00000011;
     font-size: 17px;
   }
 
-  strong { color: #d26700; }
+  strong {
+    color: #d26700;
+  }
+
+  .muted {
+    color: #6b7280;
+    font-size: 12px;
+    margin-top: 8px;
+  }
 </style>
 </head>
 
@@ -73,8 +81,7 @@
 <div class="card">
   <input id="wordInput" placeholder="Typ een woord..." />
   <button class="btn" onclick="lookup()">Zoek</button>
-
-  <div id="resultBox"></div>
+  <div id="resultBox" class="muted">Tip: probeer een Nederlands woord zoals “energie”, “amateur”, “onderzoek”.</div>
 </div>
 
 <script>
@@ -84,36 +91,48 @@
 const dictionary = {
   "atmosfeer": "De luchtlaag rondom de aarde.",
   "fossiel": "Een versteend overblijfsel van iets dat heel oud is.",
-  "strategie": "Een slim plan om iets aan te pakken.",
-  "experiment": "Een proefje dat je uitvoert om iets te onderzoeken.",
+  "strategie": "Een slim plan om iets op een goede manier aan te pakken.",
+  "experiment": "Een proefje dat je doet om iets te onderzoeken.",
   "energie": "De kracht die nodig is om dingen te laten werken.",
+  "onderzoek": "Stap voor stap iets uitzoeken om het beter te begrijpen.",
   "concentratie": "Je aandacht ergens volledig bij houden."
 };
 
 /* -----------------------------------------------------------
-   2. ONLINE NEDERLANDSE WOORDENBOEK API (Wiktionary)
+   2. ONLINE NEDERLANDSE WOORDENBOEK API (WIKTIONARY)
+   + Verbeterde betekenis-extractie
 ----------------------------------------------------------- */
 async function fetchDutchMeaning(word) {
   try {
-    const url = `https://nl.wiktionary.org/w/api.php?action=query&prop=extracts&format=json&origin=*&titles=${word}`;
+    const url = `https://nl.wiktionary.org/w/api.php?action=query&prop=extracts&format=json&origin=*&titles=${encodeURIComponent(word)}`;
     const response = await fetch(url);
     const data = await response.json();
 
-    const pages = data.query.pages;
-    const pageId = Object.keys(pages)[0];
-    const extract = pages[pageId].extract;
-
+    const pages = data?.query?.pages;
+    const id = Object.keys(pages)[0];
+    const extract = pages[id]?.extract;
     if (!extract) return null;
 
-    // Extract eerste betekenis uit HTML
-    // Wiktionary geeft HTML terug → we halen tekst eruit
-    const temp = document.createElement("div");
-    temp.innerHTML = extract;
+    const div = document.createElement("div");
+    div.innerHTML = extract;
 
-    const firstParagraph = temp.querySelector("p");
-    if (!firstParagraph) return null;
+    const paragraphs = Array
+      .from(div.querySelectorAll("p"))
+      .map(p => p.innerText.trim())
+      .filter(t => t.length > 0);
 
-    return firstParagraph.innerText.trim();
+    if (paragraphs.length === 0) return null;
+
+    // FILTER GRAMMATICA-TEKST zoals “de amateur m”
+    const meaning = paragraphs.find(t =>
+      !/^(de|het)\s+[a-zA-Z]/i.test(t) &&  // geen lidwoord+woordgroep
+      t.length > 20 &&                     // betekenis moet langer zijn
+      !t.startsWith("Afkomstig van") &&
+      !t.startsWith("Zie ook")
+    );
+
+    return meaning || null;
+
   } catch (e) {
     return null;
   }
@@ -123,10 +142,11 @@ async function fetchDutchMeaning(word) {
    3. AI fallback (werkt offline)
 ----------------------------------------------------------- */
 function detectCategory(w) {
-  if (w.match(/energie|warm|kracht|stroom/)) return "natuur & techniek";
-  if (w.match(/emo|gevoel|boos|blij|verdriet/)) return "emoties & gedrag";
-  if (w.match(/woord|taal|tekst|zin/)) return "taal & communicatie";
-  if (w.match(/eco|bio|plant|dier/)) return "biologie & natuur";
+  if (/energie|warm|kracht|stroom/.test(w)) return "natuur & techniek";
+  if (/emo|gevoel|boos|blij|verdriet|angst/.test(w)) return "emoties & gedrag";
+  if (/woord|taal|tekst|zin/.test(w)) return "taal & communicatie";
+  if (/eco|bio|plant|dier/.test(w)) return "biologie & natuur";
+  if (/onderzoek|proef|test/.test(w)) return "onderzoek & wetenschap";
   return "iets dat je kunt leren en begrijpen";
 }
 
@@ -135,31 +155,45 @@ function aiShort(word) {
 }
 
 function aiLong(word) {
-  return `Het woord “${word}” hoort bij het thema ${detectCategory(word)}. ${autoMeaningLong(word)} Dit helpt je beter te begrijpen wat het betekent.`;
+  return `Het woord “${word}” hoort bij het thema ${detectCategory(word)}. ${autoMeaningLong(word)} Dit helpt je beter te begrijpen wat het betekent en wanneer je het gebruikt.`;
 }
 
 function autoMeaningShort(w) {
-  if (w.includes("energie")) return "het kracht geeft aan dingen";
-  if (w.includes("onderzoek")) return "je iets probeert te ontdekken";
-  return "het iets is dat je kunt begrijpen of leren";
+  if (w.includes("energie")) return "het kracht geeft aan dingen of ze laat bewegen";
+  if (w.includes("onderzoek")) return "je iets probeert te ontdekken of te begrijpen";
+  if (w.includes("micro")) return "het heel klein is";
+  if (w.includes("macro")) return "het heel groot is";
+  if (w.includes("thermo")) return "het met warmte te maken heeft";
+  if (w.endsWith("heid")) return "het een eigenschap of toestand beschrijft";
+  return "het iets is dat je kunt leren of begrijpen";
 }
 
 function autoMeaningLong(w) {
   if (w.includes("energie"))
-    return "Energie zorgt ervoor dat dingen kunnen bewegen, warm worden of werken.";
-  return "Het woord wordt gebruikt in situaties die met leren, onderzoeken of communiceren te maken hebben.";
+    return "Energie is iets dat dingen laat bewegen, warm worden of werken. Zoals elektriciteit, zonlicht of je eigen spieren.";
+  if (w.includes("onderzoek"))
+    return "Onderzoek betekent dat je stap voor stap probeert te ontdekken hoe iets werkt, door vragen te stellen en dingen te testen.";
+  if (w.includes("thermo"))
+    return "Thermo betekent warmte, en woorden met ‘thermo’ gaan vaak over temperatuur, warmte of warmtestromen.";
+  if (w.includes("micro"))
+    return "Micro betekent klein; heel klein. Vaak gaat het om dingen die je alleen met een microscoop kunt zien.";
+  if (w.includes("macro"))
+    return "Macro betekent groot; het gaat om dingen die je duidelijk kunt zien zonder hulpmiddelen.";
+  if (w.endsWith("heid"))
+    return "Woorden die eindigen op ‘-heid’ beschrijven meestal een eigenschap, zoals veiligheid of eerlijkheid.";
+  return "Het woord kom je vaak tegen in de klas of in het dagelijks leven en helpt je om dingen beter te begrijpen.";
 }
 
 /* -----------------------------------------------------------
-   4. Zoekfunctie (lokale lijst → online API → AI)
+   4. HOOFDLOGICA: lokaal → online NL API → AI
 ----------------------------------------------------------- */
 async function lookup() {
-  let w = document.getElementById("wordInput").value.toLowerCase().trim();
-  let box = document.getElementById("resultBox");
+  const w = document.getElementById("wordInput").value.toLowerCase().trim();
+  const box = document.getElementById("resultBox");
 
   if (!w) return;
 
-  // 1. Lokale lijst
+  // 1) Lokale woordenlijst
   if (dictionary[w]) {
     box.innerHTML = `
       <div class="result">
@@ -169,8 +203,8 @@ async function lookup() {
     return;
   }
 
-  // 2. Online Nederlandse API
-  let online = await fetchDutchMeaning(w);
+  // 2) Online Nederlandse API (Wiktionary)
+  const online = await fetchDutchMeaning(w);
   if (online) {
     box.innerHTML = `
       <div class="result">
@@ -179,7 +213,7 @@ async function lookup() {
     return;
   }
 
-  // 3. AI fallback
+  // 3) AI fallback
   box.innerHTML = `
     <div class="result">
       <strong>Korte AI‑uitleg:</strong><br>${aiShort(w)}<br><br>
